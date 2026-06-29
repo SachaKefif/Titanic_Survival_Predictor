@@ -5,6 +5,7 @@ from pathlib import Path
 
 from sklearn.model_selection import GridSearchCV
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
@@ -16,6 +17,8 @@ test_path = PROJECT_DIR / 'data' / 'test.csv'
 
 RANDOM_STATE = 42
 TEST_SIZE = 0.15
+Algorithm = "Logistic Regression" 
+# Algorithm = "Random Forest Classifier"
 
 # Plot variables
 gender_plot_colors = ['#3a89de', '#96208b']
@@ -241,31 +244,64 @@ def exploratory_analysis(train, test):
 def hyperparameter_tuning(X, y):
     print("Performing hyperparameter finetuning...")
     best_params = None
+    
+    if Algorithm == "Random Forest Classifier":
+        # param_grid
+        param_grid = {
+            'n_estimators': [100, 200, 300],
+            'max_depth': [None, 10, 20, 30],
+            'min_samples_split': [2, 5, 10],
+            'min_samples_leaf': [1, 2, 4],
+            'bootstrap': [True, False]
+        }
 
-    # param_grid
-    param_grid = {
-        'n_estimators': [100, 200, 300],
-        'max_depth': [None, 10, 20, 30],
-        'min_samples_split': [2, 5, 10],
-        'min_samples_leaf': [1, 2, 4],
-        'bootstrap': [True, False]
-    }
+        # random_search
+        rf = RandomForestClassifier(random_state=RANDOM_STATE)
+        grid_search = GridSearchCV(estimator=rf, param_grid=param_grid, cv=3, n_jobs=-1, verbose=0)
+        grid_search.fit(X, y)
+        best_params = grid_search.best_params_
+        print("Best parameters found: ", best_params)
 
-    # random_search
-    rf = RandomForestClassifier(random_state=RANDOM_STATE)
-    grid_search = GridSearchCV(estimator=rf, param_grid=param_grid, cv=3, n_jobs=-1, verbose=0)
-    grid_search.fit(X, y)
-    best_params = grid_search.best_params_
-    print("Best parameters found: ", best_params)
+        # selection of best parameters
+        best_params = {
+            'n_estimators': best_params['n_estimators'],
+            'max_depth': best_params['max_depth'],
+            'min_samples_split': best_params['min_samples_split'],
+            'min_samples_leaf': best_params['min_samples_leaf'],
+            'bootstrap': best_params['bootstrap']
+        }
 
-    # selection of best parameters
-    best_params = {
-        'n_estimators': best_params['n_estimators'],
-        'max_depth': best_params['max_depth'],
-        'min_samples_split': best_params['min_samples_split'],
-        'min_samples_leaf': best_params['min_samples_leaf'],
-        'bootstrap': best_params['bootstrap']
-    }
+    elif Algorithm == "Logistic Regression":
+        # param_grid
+        param_grid = [
+            {
+                "solver": ["lbfgs", "newton-cg", "sag"],
+                "penalty": ["l2"],
+                "C": [0.01, 0.1, 1, 10, 100],
+                "max_iter": [500, 1000, 2000, 10000]
+            },
+            {
+                "solver": ["liblinear"],
+                "penalty": ["l1", "l2"],
+                "C": [0.01, 0.1, 1, 10, 100],
+                "max_iter": [500, 1000, 2000, 10000]
+            }
+        ]
+        
+        # random_search
+        lr = LogisticRegression()
+        grid_search = GridSearchCV(estimator=lr, param_grid=param_grid, cv=3, n_jobs=-1, verbose=0)
+        grid_search.fit(X, y)
+        best_params = grid_search.best_params_
+        print("Best parameters found: ", best_params)
+        
+        # selection of best parameters
+        best_params = {
+            'C': best_params['C'],
+            'penalty': best_params['penalty'],
+            'solver': best_params['solver'],
+            'max_iter': best_params['max_iter']
+        }
 
     return best_params
 
@@ -274,7 +310,15 @@ def train_model(X, y, best_params):
     print("Training model...")
     
     # predict
-    model = RandomForestClassifier(**best_params, random_state=RANDOM_STATE)
+    
+    # Random Forest Classifier
+    if Algorithm == "Random Forest Classifier":
+        model = RandomForestClassifier(**best_params, random_state=RANDOM_STATE)
+    
+    elif Algorithm == "Logistic Regression":
+        # Logistic Regression
+        model = LogisticRegression(**best_params, random_state=RANDOM_STATE)
+    
     model.fit(X, y)
     print("Model trained.")
 
@@ -295,14 +339,33 @@ def evaluate_model(model, X_test, y_test):
     print("Confusion matrix:")
     print(confusion_matrix(y_test, y_pred))
 
+def create_submission(model, df_test, output_path):
+    passenger_ids = df_test["PassengerId"]
+
+    df_test_encoded = encode_categorical(df_test)
+    predictions = model.predict(df_test_encoded)
+
+    submission = pd.DataFrame({
+        "PassengerId": passenger_ids,
+        "Survived": predictions
+    })
+
+    submission.to_csv(output_path, index=False)
 
 def pipeline(train_file_path, test_file_path, target_column):
+    if Algorithm not in ["Random Forest Classifier", "Logistic Regression"]:
+        raise ValueError("Invalid algorithm. Please choose either 'Random Forest Classifier' or 'Logistic Regression'.")
+    elif Algorithm == "Random Forest Classifier":
+        print("Using Random Forest Classifier...")
+    elif Algorithm == "Logistic Regression":
+        print("Using Logistic Regression...")
+    
     # Load and clean data
     df_train, df_test = load_data(train_file_path, test_file_path)
     df_train = clean_data(df_train)
 
     # Exploratory analysis
-    exploratory_analysis(df_train, df_test)
+    # exploratory_analysis(df_train, df_test)
 
     # Encode categorical variables
     df_train = encode_categorical(df_train)
@@ -316,8 +379,15 @@ def pipeline(train_file_path, test_file_path, target_column):
 
     # Evaluate model performance
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE)
-    model = train_model(X_train, y_train, best_params)
-    evaluate_model(model, X_test, y_test)
+    eval_model = train_model(X_train, y_train, best_params)
+    evaluate_model(eval_model, X_test, y_test)
+    
+    # After evaluating the mode, train the model on the entire training dataset and create a submission file
+    final_model = train_model(X, y, best_params)
+    
+    submission_path = PROJECT_DIR / "Submissions" / "submission.csv"
+    create_submission(final_model, df_test, submission_path)
 
 
 pipeline(train_path, test_path, "Survived")
+
