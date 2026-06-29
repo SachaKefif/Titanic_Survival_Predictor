@@ -1,6 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+from pathlib import Path
 
 from sklearn.model_selection import GridSearchCV
 from sklearn.ensemble import RandomForestClassifier
@@ -8,11 +9,12 @@ from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.model_selection import train_test_split
 
 # Global variables
-train_path = '../data/train.csv'
-test_path = '../data/test.csv'
+PROJECT_DIR = Path(__file__).resolve().parents[1]
+train_path = PROJECT_DIR / 'data' / 'train.csv'
+test_path = PROJECT_DIR / 'data' / 'test.csv'
 
 RANDOM_STATE = 42
-TEST_SIZE = 0.25
+TEST_SIZE = 0.15
 
 # Plot variables
 gender_plot_colors = ['#3a89de', '#96208b']
@@ -21,8 +23,8 @@ embarked_plot_colors = ['#2eb847', '#5dc0c7', '#006eff']
 survived_plot_colors = ['#c22b2b', '#6c2bc2']
 
 
-def loead_data(train_file_path, test_file_path):
-    print(f"Reading training file located at {train_path}...")
+def load_data(train_file_path, test_file_path):
+    print(f"Reading training file located at {train_file_path}...")
     df_train = pd.read_csv(train_file_path)
     df_test = pd.read_csv(test_file_path)
     return df_train, df_test
@@ -285,7 +287,7 @@ def evaluate_model(model, X_test, y_test):
 
 def pipeline(train_file_path, test_file_path, target_column):
     # Load and clean data
-    df_train, df_test = loead_data(train_file_path, test_file_path)
+    df_train, df_test = load_data(train_file_path, test_file_path)
     df_train = clean_data(df_train)
 
     # Encode categorical variables
