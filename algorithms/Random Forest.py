@@ -7,6 +7,7 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
 
 # Global variables
 PROJECT_DIR = Path(__file__).resolve().parents[1]
@@ -39,14 +40,24 @@ def clean_data(df):
 
 def encode_categorical(df):
     print("Encoding categorical values...")
-    # Encode
+    df = df.copy()
 
-    # Sex
+    if 'Age' in df.columns:
+        df['Age'] = df['Age'].fillna(df['Age'].median())
 
-    # Age
+    if 'Fare' in df.columns:
+        df['Fare'] = df['Fare'].fillna(df['Fare'].median())
 
+    if 'Embarked' in df.columns:
+        df['Embarked'] = df['Embarked'].fillna(df['Embarked'].mode()[0])
 
-    # Embarked
+    if 'Sex' in df.columns:
+        df['Sex'] = df['Sex'].map({'male': 0, 'female': 1})
+
+    df = pd.get_dummies(df, columns=['Embarked'], drop_first=True, dtype=int)
+
+    columns_to_drop = ['PassengerId', 'Name', 'Ticket', 'Cabin']
+    df = df.drop(columns=[column for column in columns_to_drop if column in df.columns])
 
     return df
 
@@ -242,7 +253,7 @@ def hyperparameter_tuning(X, y):
 
     # random_search
     rf = RandomForestClassifier(random_state=RANDOM_STATE)
-    grid_search = GridSearchCV(estimator=rf, param_grid=param_grid, cv=3, n_jobs=-1, verbose=2)
+    grid_search = GridSearchCV(estimator=rf, param_grid=param_grid, cv=3, n_jobs=-1, verbose=0)
     grid_search.fit(X, y)
     best_params = grid_search.best_params_
     print("Best parameters found: ", best_params)
@@ -272,17 +283,17 @@ def train_model(X, y, best_params):
 
 def evaluate_model(model, X_test, y_test):
     print("Evaluating model....")
-    # accuracy
+    y_pred = model.predict(X_test)
 
-    # precision
+    accuracy = accuracy_score(y_test, y_pred)
+    print(f"Accuracy: {accuracy:.4f}")
 
-    # recall
-
-    # f-1 score
-
-    # ROC Curve
+    print("Classification report:")
+    print(classification_report(y_test, y_pred))
 
     # Confusion matrix
+    print("Confusion matrix:")
+    print(confusion_matrix(y_test, y_pred))
 
 
 def pipeline(train_file_path, test_file_path, target_column):
@@ -290,11 +301,11 @@ def pipeline(train_file_path, test_file_path, target_column):
     df_train, df_test = load_data(train_file_path, test_file_path)
     df_train = clean_data(df_train)
 
-    # Encode categorical variables
-    df_train = encode_categorical(df_train)
-
     # Exploratory analysis
     exploratory_analysis(df_train, df_test)
+
+    # Encode categorical variables
+    df_train = encode_categorical(df_train)
 
     X = df_train.drop(columns=[target_column])
     y = df_train[target_column]
@@ -303,11 +314,9 @@ def pipeline(train_file_path, test_file_path, target_column):
     best_params = hyperparameter_tuning(X, y)
     print("Best Hyperparameters :", best_params)
 
-    # Train final model
-    model = train_model(X, y, best_params)
-
     # Evaluate model performance
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE)
+    model = train_model(X_train, y_train, best_params)
     evaluate_model(model, X_test, y_test)
 
 
